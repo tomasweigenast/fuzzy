@@ -69,7 +69,7 @@ class Fuzzy<T extends Object> {
     }
 
     if (limit > 0) {
-      return resultsAndWeights.results.sublist(0, limit);
+      return resultsAndWeights.results.take(limit).toList();
     }
 
     return resultsAndWeights.results;
