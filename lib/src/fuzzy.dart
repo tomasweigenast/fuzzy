@@ -19,13 +19,22 @@ export 'data/fuzzy_options.dart';
 /// ```
 /// import 'package:fuzzy/fuzzy.dart';
 /// ```
-class Fuzzy {
+class Fuzzy<T extends Object> {
   /// Instantiates it given a list of strings to look into, and options
   Fuzzy(this.source, {this.tokens, FuzzyOptions? options}) 
-      : options = options ?? FuzzyOptions();
+      : options = options ?? FuzzyOptions(),
+        _identifiers = null;
+
+  /// Creates a new Fuzzy index with identifiers.
+  Fuzzy.withIdentifiers(Map<String, T> source, {this.tokens, FuzzyOptions? options}) 
+    : options = options ?? FuzzyOptions(),
+      source = source.keys.toList(),
+      _identifiers = source;
 
   /// The original list of string
   final List<String> source;
+
+  final Map<String, T>? _identifiers;
 
   /// An optional list of predefined tokens for each element in [source].
   final List<List<String>>? tokens;
@@ -34,15 +43,16 @@ class Fuzzy {
   final FuzzyOptions options;
 
   /// Search for a given [pattern] on the [list], optionally [limit]ing the result length
-  Future<List<Result>> search(String pattern, [int limit = -1]) async {
+  Future<List<Result<T>>> search(String pattern, [int limit = -1]) async {
     if (source.isEmpty) {
-      return <Result>[];
+      return <Result<T>>[];
     }
 
     // Return original list as [List<Result>] if pattern is empty
     if (pattern.isEmpty) {
       return source
-          .map((item) => Result(
+          .map((item) => Result<T>(
+                identifier: _identifierFor(item),
                 item: item,
                 matches: const [],
                 score: 0,
@@ -87,13 +97,14 @@ class Fuzzy {
     );
   }
 
-  Future<ResultsAndWeights> _search(List<Bitap> tokenSearchers, Bitap fullSearcher) async {
-    final results = <Result>[];
+  Future<ResultsAndWeights<T>> _search(List<Bitap> tokenSearchers, Bitap fullSearcher) async {
+    final results = <Result<T>>[];
     // final resultMap = <int, Result>{};
 
     if(source.length > 10000) {
       var chunks = _chunkList(source, 10000);
       var tasks = chunks.map((e) => _FuzzySearchTask(_FuzzySearchTaskArgs(
+        identifiers: _identifiers,
         tokenSearchers: tokenSearchers, 
         fullSearcher: fullSearcher, 
         tokens: tokens ?? e.map((e) => e.split(' ')).toList(), 
@@ -120,10 +131,12 @@ class Fuzzy {
     } else {
       // Iterate over every item
       for (var i = 0, len = source.length; i < len; i += 1) {
-        results.addAll(_analyze(
+        var record = source[i];
+        results.addAll(_analyze<T>(
           key: '',
-          value: source[i].toString().trim(),
-          record: source[i],
+          value: record.toString().trim(),
+          record: record,
+          identifier: _identifierFor(record),
           index: i,
           tokenSearchers: tokenSearchers,
           fullSearcher: fullSearcher,
@@ -133,13 +146,14 @@ class Fuzzy {
       }
     }
 
-    return ResultsAndWeights(results: results, weights: {});
+    return ResultsAndWeights<T>(results: results, weights: {});
   }
 
-  static List<Result> _analyze({
+  static List<Result<T>> _analyze<T extends Object>({
     String key = '',
     required String value,
     required String record,
+    required T? identifier,
     required int index,
     required List<Bitap> tokenSearchers,
     required Bitap fullSearcher,
@@ -151,8 +165,8 @@ class Fuzzy {
       return [];
     }
 
-    var resultMap = <int, Result>{};
-    var results = <Result>[];
+    var resultMap = <int, Result<T>>{};
+    var results = <Result<T>>[];
 
     var exists = false;
     var averageScore = -1.0;
@@ -226,8 +240,9 @@ class Fuzzy {
         ));
       } else {
         // Add it to the raw result list
-        final res = Result(
+        final res = Result<T>(
           item: record,
+          identifier: identifier,
           matches: [
             ResultDetails(
               key: key,
@@ -304,36 +319,48 @@ class Fuzzy {
 
     return chunks;
   }
+
+  T? _identifierFor(String record) {
+    if(_identifiers == null) {
+      return null;
+    }
+
+    return _identifiers![record];
+  }
 }
 
 // ignore: strict_raw_type
-List<AsyncTask> _taskTypeRegister() => [_FuzzySearchTask(_FuzzySearchTaskArgs(tokenSearchers: const [], fullSearcher: Bitap.empty(), tokens: [], words: [], options: FuzzyOptions()))];
+List<AsyncTask> _taskTypeRegister() => [
+  _FuzzySearchTask(_FuzzySearchTaskArgs(tokenSearchers: const [], fullSearcher: Bitap.empty(), identifiers: null, tokens: [], words: [], options: FuzzyOptions()))
+];
 
-class _FuzzySearchTask extends AsyncTask<_FuzzySearchTaskArgs, List<Result>> {
+class _FuzzySearchTask<T extends Object> extends AsyncTask<_FuzzySearchTaskArgs<T>, List<Result<T>>> {
 
-  final _FuzzySearchTaskArgs args;
+  final _FuzzySearchTaskArgs<T> args;
 
   _FuzzySearchTask(this.args);
 
   @override
   // ignore: strict_raw_type
-  AsyncTask<_FuzzySearchTaskArgs, List<Result>> instantiate(_FuzzySearchTaskArgs parameters, [Map<String, SharedData>? sharedData]) {
-    return _FuzzySearchTask(parameters);
+  AsyncTask<_FuzzySearchTaskArgs<T>, List<Result<T>>> instantiate(_FuzzySearchTaskArgs<T> parameters, [Map<String, SharedData>? sharedData]) {
+    return _FuzzySearchTask<T>(parameters);
   }
 
   @override
-  _FuzzySearchTaskArgs parameters() {
+  _FuzzySearchTaskArgs<T> parameters() {
     return args;
   }
 
   @override
-  FutureOr<List<Result>> run() {
-    List<Result> results = [];
+  FutureOr<List<Result<T>>> run() {
+    List<Result<T>> results = [];
     for (var i = 0, len = args.words.length; i < len; i += 1) {
-      results.addAll(Fuzzy._analyze(
+      var record = args.words[1];
+      results.addAll(Fuzzy._analyze<T>(
         key: '',
-        value: args.words[i].toString().trim(),
-        record: args.words[i],
+        value: record.toString().trim(),
+        record: record,
+        identifier: args.identifiers?[record],
         index: i,
         tokenSearchers: args.tokenSearchers,
         fullSearcher: args.fullSearcher,
@@ -347,12 +374,13 @@ class _FuzzySearchTask extends AsyncTask<_FuzzySearchTaskArgs, List<Result>> {
 
 }
 
-class _FuzzySearchTaskArgs {
+class _FuzzySearchTaskArgs<T extends Object> {
   final List<List<String>> tokens;
   final List<Bitap> tokenSearchers;
   final Bitap fullSearcher;
   final List<String> words;
   final FuzzyOptions options;
+  final Map<String, T>? identifiers;
 
-  _FuzzySearchTaskArgs({required this.tokenSearchers, required this.fullSearcher, required this.tokens, required this.words, required this.options});
+  _FuzzySearchTaskArgs({required this.tokenSearchers, required this.fullSearcher, required this.tokens, required this.words, required this.options, required this.identifiers});
 }

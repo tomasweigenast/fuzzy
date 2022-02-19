@@ -9,5 +9,5 @@ environment:
 
 dependencies: 
   benchmark_harness: ^2.0.0
-  fuzzy:
+  fuzzysearch:
     path: ../

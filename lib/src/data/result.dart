@@ -21,7 +21,7 @@ class Searchers {
 }
 
 /// Class to hold results and weights
-class ResultsAndWeights {
+class ResultsAndWeights<T extends Object> {
   /// Instantiates it
   ResultsAndWeights({
     required this.results,
@@ -29,23 +29,27 @@ class ResultsAndWeights {
   });
 
   /// The list of results
-  final List<Result> results;
+  final List<Result<T>> results;
 
   /// The weights
   final Map<String, double> weights;
 }
 
 /// Holds the result (with score and index)
-class Result {
+class Result<T extends Object> {
   /// Instantiates it
   Result({
     required this.item,
+    required this.identifier,
     this.matches = const [],
     this.score = 0,
   });
 
   /// Item in the original list
   final String item;
+
+  /// The identifier of [item].
+  final T? identifier;
 
   /// Details of this result
   final List<ResultDetails> matches;

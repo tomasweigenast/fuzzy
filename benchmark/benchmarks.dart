@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:fuzzy/fuzzy.dart';
+import 'package:fuzzysearch/fuzzysearch.dart';
 import 'base/benchmark_base.dart';
 
 class BiggerSourceBenchmark extends AsyncBenchmarkBase {

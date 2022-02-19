@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:fuzzy/fuzzy.dart';
+import 'package:fuzzysearch/fuzzysearch.dart';
 
 Future<int> main() async {
 

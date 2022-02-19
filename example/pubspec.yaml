@@ -7,5 +7,5 @@ environment:
 publish_to: none
 
 dependencies:
-  fuzzy:
+  fuzzysearch:
     path: ../
