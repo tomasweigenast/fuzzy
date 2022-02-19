@@ -1,7 +1,6 @@
 library fuzzy;
 
 import 'dart:async';
-import 'dart:developer' as dev;
 import 'dart:math';
 
 import 'package:async_task/async_task.dart';
@@ -182,8 +181,6 @@ class Fuzzy<T extends Object> {
       for (var i = 0; i < tokenSearchers.length; i++) {
         final tokenSearcher = tokenSearchers[i];
 
-        dev.log('\nPattern: "${tokenSearcher.pattern}"');
-
         var hasMatchInText = false;
 
         for (var j = 0; j < words.length; j++) {
@@ -198,7 +195,6 @@ class Fuzzy<T extends Object> {
               scores.add(1);
             }
           }
-          dev.log('Token: "$word", score: ${tokenSearchResult.score}');
         }
 
         if (hasMatchInText) {
@@ -207,8 +203,6 @@ class Fuzzy<T extends Object> {
       }
 
       averageScore = scores.fold<double>(0, (memo, score) => memo + score) / scores.length;
-
-      dev.log('Token score average: $averageScore');
     }
 
     double finalScore = 0;
@@ -216,13 +210,9 @@ class Fuzzy<T extends Object> {
       finalScore = (finalScore + averageScore) / 2;
     }
 
-    dev.log('Score average (final): $finalScore');
-
     final checkTextMatches = (options.tokenize && options.matchAllTokens)
         ? numTextMatches >= tokenSearchers.length
         : true;
-
-    dev.log('\nCheck Matches: $checkTextMatches');
 
     // If a match is found, add the item to <rawResults>, including its score
     if (exists && checkTextMatches) {
@@ -268,8 +258,6 @@ class Fuzzy<T extends Object> {
   }
 
   void _computeScore(Map<String, double> weights, List<Result> results) {
-    dev.log('\n\nComputing score:\n');
-
     if (weights.length <= 1) {
       _computeScoreNoWeights(results);
     } else {
@@ -307,7 +295,6 @@ class Fuzzy<T extends Object> {
   }
 
   void _sort(List<Result> results) {
-    dev.log('\n\nSorting....');
     results.sort(options.sortFn);
   }
 
