@@ -1,16 +1,16 @@
 name: fuzzy
-version: 0.4.0-nullsafety.0
+version: 0.4.1
 
-description: >
-  Fuzzy search in Dart. Initially a code conversion, subset of Fuse.js.
-homepage: https://github.com/comigor/fuzzy
+description: Fuzzy search in Dart. Initially a code conversion, subset of Fuse.js.
+homepage: https://github.com/tomasweigenast/fuzzy
 
 environment:
-  sdk: ">=2.12.0-0.dev <3.0.0"
+  sdk: ">=2.14.0 <3.0.0"
 
 dependencies:
+  async_task: ^1.0.17
   latinize: ^0.1.0-nullsafety
 
 dev_dependencies:
-  test: ^1.16.0-nullsafety
-  pedantic: ^1.10.0-nullsafety
+  lints: ^1.0.1
+  test: ^1.20.1

@@ -1,0 +1,13 @@
+name: fuzzy_benchmark
+description: Benchmark for Fuzzy.
+version: 1.0.0
+
+publish_to: none
+
+environment:
+  sdk: '>=2.16.0-80.1.beta <3.0.0'
+
+dependencies: 
+  benchmark_harness: ^2.0.0
+  fuzzy:
+    path: ../

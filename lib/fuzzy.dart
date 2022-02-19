@@ -1,6 +1,10 @@
 library fuzzy;
 
+import 'dart:async';
+import 'dart:developer' as dev;
 import 'dart:math';
+
+import 'package:async_task/async_task.dart';
 
 import 'bitap/bitap.dart';
 import 'data/fuzzy_options.dart';
@@ -15,28 +19,30 @@ export 'data/fuzzy_options.dart';
 /// ```
 /// import 'package:fuzzy/fuzzy.dart';
 /// ```
-class Fuzzy<T> {
+class Fuzzy {
   /// Instantiates it given a list of strings to look into, and options
-  Fuzzy(
-    List<T>? list, {
-    FuzzyOptions<T>? options,
-  })  : list = list ?? [],
-        options = options ?? FuzzyOptions<T>();
+  Fuzzy(this.source, {this.tokens, FuzzyOptions? options}) 
+      : options = options ?? FuzzyOptions();
 
   /// The original list of string
-  final List<T> list;
+  final List<String> source;
+
+  /// An optional list of predefined tokens for each element in [source].
+  final List<List<String>>? tokens;
 
   /// Fuzz search Options
-  final FuzzyOptions<T> options;
+  final FuzzyOptions options;
 
   /// Search for a given [pattern] on the [list], optionally [limit]ing the result length
-  List<Result<T>> search(String pattern, [int limit = -1]) {
-    if (list.isEmpty) return <Result<T>>[];
+  Future<List<Result>> search(String pattern, [int limit = -1]) async {
+    if (source.isEmpty) {
+      return <Result>[];
+    }
 
     // Return original list as [List<Result>] if pattern is empty
-    if (pattern == '') {
-      return list
-          .map((item) => Result<T>(
+    if (pattern.isEmpty) {
+      return source
+          .map((item) => Result(
                 item: item,
                 matches: const [],
                 score: 0,
@@ -45,10 +51,8 @@ class Fuzzy<T> {
     }
 
     final searchers = _prepareSearchers(pattern);
-
-    final resultsAndWeights =
-        _search(searchers.tokenSearchers, searchers.fullSearcher);
-
+    final resultsAndWeights = await _search(searchers.tokenSearchers, searchers.fullSearcher);
+    
     _computeScore(resultsAndWeights.weights, resultsAndWeights.results);
 
     if (options.shouldSort) {
@@ -83,93 +87,92 @@ class Fuzzy<T> {
     );
   }
 
-  ResultsAndWeights<T> _search(List<Bitap> tokenSearchers, Bitap fullSearcher) {
-    final results = <Result<T>>[];
-    final resultMap = <int, Result<T>>{};
+  Future<ResultsAndWeights> _search(List<Bitap> tokenSearchers, Bitap fullSearcher) async {
+    final results = <Result>[];
+    // final resultMap = <int, Result>{};
 
-    // Check the first item in the list, if it's a string, then we assume
-    // that every item in the list is also a string, and thus it's a flattened array.
-    if (list[0] is String) {
+    if(source.length > 10000) {
+      var chunks = _chunkList(source, 10000);
+      var tasks = chunks.map((e) => _FuzzySearchTask(_FuzzySearchTaskArgs(
+        tokenSearchers: tokenSearchers, 
+        fullSearcher: fullSearcher, 
+        tokens: tokens ?? e.map((e) => e.split(' ')).toList(), 
+        words: e, 
+        options: options
+      ))).toList();
+
+      var executor = AsyncExecutor(
+        sequential: false,
+        parallelism: 10,
+        taskTypeRegister: _taskTypeRegister,
+      );
+
+      var executions = executor.executeAll(tasks);
+      await Future.wait(executions);
+
+      for(var task in tasks) {
+        var taskResult = task.result!;
+        results.addAll(taskResult);
+      }
+
+      await executor.close();
+
+    } else {
       // Iterate over every item
-      for (var i = 0, len = list.length; i < len; i += 1) {
-        _analyze(
+      for (var i = 0, len = source.length; i < len; i += 1) {
+        results.addAll(_analyze(
           key: '',
-          value: list[i].toString().trim(),
-          record: list[i],
+          value: source[i].toString().trim(),
+          record: source[i],
           index: i,
           tokenSearchers: tokenSearchers,
           fullSearcher: fullSearcher,
-          results: results,
-          resultMap: resultMap,
-        );
-      }
-
-      return ResultsAndWeights(results: results, weights: {});
-    }
-
-    // Otherwise, the first item is an Object (hopefully), and thus the searching
-    // is done on the values of the keys of each item.
-    final weights = <String, double>{};
-    for (var i = 0, len = list.length; i < len; i += 1) {
-      final item = list[i];
-      // Iterate over every key
-      for (var j = 0; j < options.keys.length; j += 1) {
-        final key = options.keys[j].name;
-        final value = options.keys[j].getter(item);
-
-        final weight = 1.0 - options.keys[j].weight;
-        weights.update(key, (_) => weight, ifAbsent: () => weight);
-
-        _analyze(
-          key: key,
-          value: value,
-          record: list[i],
-          index: i,
-          tokenSearchers: tokenSearchers,
-          fullSearcher: fullSearcher,
-          results: results,
-          resultMap: resultMap,
-        );
+          options: options,
+          tokens: tokens
+        ));
       }
     }
 
-    return ResultsAndWeights(results: results, weights: weights);
+    return ResultsAndWeights(results: results, weights: {});
   }
 
-  List<Result<T>> _analyze({
+  static List<Result> _analyze({
     String key = '',
     required String value,
-    required T record,
+    required String record,
     required int index,
-    List<Bitap> tokenSearchers = const [],
+    required List<Bitap> tokenSearchers,
     required Bitap fullSearcher,
-    List<Result<T>> results = const [],
-    Map<int, Result<T>> resultMap = const {},
+    required FuzzyOptions options,
+    List<List<String>>? tokens
   }) {
     // Check if the texvaluet can be searched
     if (value.isEmpty) {
       return [];
     }
 
+    var resultMap = <int, Result>{};
+    var results = <Result>[];
+
     var exists = false;
     var averageScore = -1.0;
     var numTextMatches = 0;
 
-    final mainSearchResult = fullSearcher.search(value.toString());
-    _log('Full text: "${value}", score: ${mainSearchResult.score}');
+    // final mainSearchResult = fullSearcher.search(value);
+    // dev.log('Full text: "$value", score: ${mainSearchResult.score}');
 
     if (options.tokenize) {
-      final words = value.toString().split(options.tokenSeparator);
+      final words = tokens == null ? value.split(options.tokenSeparator) : tokens[index];
       final scores = <double>[];
 
-      for (var i = 0; i < tokenSearchers.length; i += 1) {
+      for (var i = 0; i < tokenSearchers.length; i++) {
         final tokenSearcher = tokenSearchers[i];
 
-        _log('\nPattern: "${tokenSearcher.pattern}"');
+        dev.log('\nPattern: "${tokenSearcher.pattern}"');
 
         var hasMatchInText = false;
 
-        for (var j = 0; j < words.length; j += 1) {
+        for (var j = 0; j < words.length; j++) {
           final word = words[j];
           final tokenSearchResult = tokenSearcher.search(word);
           if (tokenSearchResult.isMatch) {
@@ -181,7 +184,7 @@ class Fuzzy<T> {
               scores.add(1);
             }
           }
-          _log('Token: "${word}", score: ${tokenSearchResult.score}');
+          dev.log('Token: "$word", score: ${tokenSearchResult.score}');
         }
 
         if (hasMatchInText) {
@@ -189,50 +192,49 @@ class Fuzzy<T> {
         }
       }
 
-      averageScore =
-          scores.fold<double>(0, (memo, score) => memo + score) / scores.length;
+      averageScore = scores.fold<double>(0, (memo, score) => memo + score) / scores.length;
 
-      _log('Token score average: $averageScore');
+      dev.log('Token score average: $averageScore');
     }
 
-    var finalScore = mainSearchResult.score;
+    double finalScore = 0;
     if (averageScore > -1) {
       finalScore = (finalScore + averageScore) / 2;
     }
 
-    _log('Score average (final): $finalScore');
+    dev.log('Score average (final): $finalScore');
 
     final checkTextMatches = (options.tokenize && options.matchAllTokens)
         ? numTextMatches >= tokenSearchers.length
         : true;
 
-    _log('\nCheck Matches: ${checkTextMatches}');
+    dev.log('\nCheck Matches: $checkTextMatches');
 
     // If a match is found, add the item to <rawResults>, including its score
-    if ((exists || mainSearchResult.isMatch) && checkTextMatches) {
+    if (exists && checkTextMatches) {
       // Check if the item already exists in our results
       final existingResult = resultMap[index];
       if (existingResult != null) {
         // Use the lowest score
         // existingResult.score, bitapResult.score
-        existingResult.matches.add(ResultDetails<T>(
+        existingResult.matches.add(ResultDetails(
           key: key,
           arrayIndex: index,
           value: value,
           score: finalScore,
-          matchedIndices: mainSearchResult.matchedIndices,
+          matchedIndices: [],
         ));
       } else {
         // Add it to the raw result list
         final res = Result(
           item: record,
           matches: [
-            ResultDetails<T>(
+            ResultDetails(
               key: key,
               arrayIndex: index,
               value: value,
               score: finalScore,
-              matchedIndices: mainSearchResult.matchedIndices,
+              matchedIndices: [],
             ),
           ],
         );
@@ -250,8 +252,8 @@ class Fuzzy<T> {
     return results;
   }
 
-  void _computeScore(Map<String, double> weights, List<Result<T>> results) {
-    _log('\n\nComputing score:\n');
+  void _computeScore(Map<String, double> weights, List<Result> results) {
+    dev.log('\n\nComputing score:\n');
 
     if (weights.length <= 1) {
       _computeScoreNoWeights(results);
@@ -260,7 +262,7 @@ class Fuzzy<T> {
     }
   }
 
-  void _computeScoreNoWeights(List<Result<T>> results) {
+  void _computeScoreNoWeights(List<Result> results) {
     for (var i = 0, len = results.length; i < len; i += 1) {
       final matches = results[i].matches;
       var bestScore = matches.map((m) => m.score).fold<double>(
@@ -269,8 +271,7 @@ class Fuzzy<T> {
     }
   }
 
-  void _computeScoreWithWeights(
-      Map<String, double> weights, List<Result<T>> results) {
+  void _computeScoreWithWeights(Map<String, double> weights, List<Result> results) {
     for (var i = 0, len = results.length; i < len; i += 1) {
       var currScore = 1.0;
 
@@ -290,14 +291,68 @@ class Fuzzy<T> {
     }
   }
 
-  void _sort(List<Result<T>> results) {
-    _log('\n\nSorting....');
+  void _sort(List<Result> results) {
+    dev.log('\n\nSorting....');
     results.sort(options.sortFn);
   }
 
-  void _log(String log) {
-    if (options.verbose) {
-      print(log);
+  static List<List<String>> _chunkList(List<String> input, int chunkSize) {
+    var chunks = <List<String>>[];
+    for (var i = 0; i < input.length; i += chunkSize) {
+      chunks.add(input.sublist(i, i+chunkSize > input.length ? input.length : i + chunkSize)); 
     }
+
+    return chunks;
   }
+}
+
+// ignore: strict_raw_type
+List<AsyncTask> _taskTypeRegister() => [_FuzzySearchTask(_FuzzySearchTaskArgs(tokenSearchers: const [], fullSearcher: Bitap.empty(), tokens: [], words: [], options: FuzzyOptions()))];
+
+class _FuzzySearchTask extends AsyncTask<_FuzzySearchTaskArgs, List<Result>> {
+
+  final _FuzzySearchTaskArgs args;
+
+  _FuzzySearchTask(this.args);
+
+  @override
+  // ignore: strict_raw_type
+  AsyncTask<_FuzzySearchTaskArgs, List<Result>> instantiate(_FuzzySearchTaskArgs parameters, [Map<String, SharedData>? sharedData]) {
+    return _FuzzySearchTask(parameters);
+  }
+
+  @override
+  _FuzzySearchTaskArgs parameters() {
+    return args;
+  }
+
+  @override
+  FutureOr<List<Result>> run() {
+    List<Result> results = [];
+    for (var i = 0, len = args.words.length; i < len; i += 1) {
+      results.addAll(Fuzzy._analyze(
+        key: '',
+        value: args.words[i].toString().trim(),
+        record: args.words[i],
+        index: i,
+        tokenSearchers: args.tokenSearchers,
+        fullSearcher: args.fullSearcher,
+        options: args.options,
+        tokens: args.tokens 
+      ));
+    }
+
+    return results;
+  }
+
+}
+
+class _FuzzySearchTaskArgs {
+  final List<List<String>> tokens;
+  final List<Bitap> tokenSearchers;
+  final Bitap fullSearcher;
+  final List<String> words;
+  final FuzzyOptions options;
+
+  _FuzzySearchTaskArgs({required this.tokenSearchers, required this.fullSearcher, required this.tokens, required this.words, required this.options});
 }

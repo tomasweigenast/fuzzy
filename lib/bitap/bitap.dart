@@ -16,8 +16,12 @@ import 'data/match_index.dart';
 /// one bit for each element of the pattern. Then it is able to do most of the
 /// work with bitwise operations, which are extremely fast.
 class Bitap {
+
+  /// Empty bitap
+  Bitap.empty() : options = FuzzyOptions();
+
   /// Instantiates a bitap, given options
-  Bitap(String pattern, {required FuzzyOptions options}) : options = options {
+  Bitap(String pattern, {required this.options}) {
     this.pattern = options.isCaseSensitive ? pattern : pattern.toLowerCase();
     this.pattern =
         options.shouldNormalize ? latinize(this.pattern) : this.pattern;
@@ -72,5 +76,5 @@ class Bitap {
   }
 
   @override
-  String toString() => 'Bitap: $pattern, $patternAlphabet\noptions: $options';
+  String toString() => 'Bitap: $pattern, $patternAlphabet options [$options]';
 }

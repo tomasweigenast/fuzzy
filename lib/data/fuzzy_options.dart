@@ -1,7 +1,7 @@
 import 'result.dart';
 
 /// Represents a weighted getter of an item
-class WeightedKey<T> {
+class WeightedKey {
   /// Instantiates it
   WeightedKey({
     required this.name,
@@ -13,7 +13,7 @@ class WeightedKey<T> {
   final String name;
 
   /// Getter to a specifc string inside item
-  final String Function(T obj) getter;
+  final String Function(String obj) getter;
 
   /// Weight of this getter. When passing a list of WeightedKey to FuzzyOptions,
   /// the weight can be any positive number; FuzzyOptions normalizes it on
@@ -22,12 +22,12 @@ class WeightedKey<T> {
 }
 
 /// Function used to sort results.
-typedef SorterFn<T> = int Function(Result<T> a, Result<T> b);
+typedef SorterFn = int Function(Result a, Result b);
 
-int _defaultSortFn<T>(Result<T> a, Result<T> b) => a.score.compareTo(b.score);
+int _defaultSortFn<T>(Result a, Result b) => a.score.compareTo(b.score);
 
 /// Options for performing a fuzzy search
-class FuzzyOptions<T> {
+class FuzzyOptions {
   /// Instantiate an options object.
   /// The `keys` list requires a positive number (they'll be normalized upon
   /// instantiation). If any weight is not positive, throws an ArgumentError.
@@ -41,9 +41,9 @@ class FuzzyOptions<T> {
     this.findAllMatches = false,
     this.minTokenCharLength = 1,
     this.minMatchCharLength = 1,
-    List<WeightedKey<T>> keys = const [],
+    List<WeightedKey> keys = const [],
     this.shouldSort = true,
-    SorterFn<T>? sortFn,
+    SorterFn? sortFn,
     this.tokenize = false,
     this.matchAllTokens = false,
     this.verbose = false,
@@ -87,13 +87,13 @@ class FuzzyOptions<T> {
   final int minMatchCharLength;
 
   /// List of weighted getters to properties that will be searched
-  final List<WeightedKey<T>> keys;
+  final List<WeightedKey> keys;
 
   /// Whether to sort the result list, by score
   final bool shouldSort;
 
   /// Default sort function
-  final SorterFn<T> sortFn;
+  final SorterFn sortFn;
 
   /// When true, the search algorithm will search individual words **and** the full string,
   /// computing the final score as a function of both. Note that when `tokenize` is `true`,
@@ -112,7 +112,7 @@ class FuzzyOptions<T> {
   final bool shouldNormalize;
 
   /// Copy these options with some modifications.
-  FuzzyOptions<T> copyWith({
+  FuzzyOptions copyWith({
     int? location,
     int? distance,
     double? threshold,
@@ -122,9 +122,9 @@ class FuzzyOptions<T> {
     bool? findAllMatches,
     int? minTokenCharLength,
     int? minMatchCharLength,
-    List<WeightedKey<T>>? keys,
+    List<WeightedKey>? keys,
     bool? shouldSort,
-    SorterFn<T>? sortFn,
+    SorterFn? sortFn,
     bool? tokenize,
     bool? matchAllTokens,
     bool? verbose,
@@ -149,7 +149,7 @@ class FuzzyOptions<T> {
         shouldNormalize: shouldNormalize ?? this.shouldNormalize,
       );
 
-  static List<WeightedKey<T>> _normalizeWeights<T>(List<WeightedKey<T>> keys) {
+  static List<WeightedKey> _normalizeWeights<T>(List<WeightedKey> keys) {
     if (keys.isEmpty) {
       return [];
     }
@@ -159,7 +159,7 @@ class FuzzyOptions<T> {
         .fold<double>(0, (previousValue, element) => previousValue + element);
 
     return keys
-        .map((key) => WeightedKey<T>(
+        .map((key) => WeightedKey(
               name: key.name,
               getter: key.getter,
               weight: key.weight / weightSum,

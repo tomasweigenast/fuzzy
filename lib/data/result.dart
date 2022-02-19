@@ -21,7 +21,7 @@ class Searchers {
 }
 
 /// Class to hold results and weights
-class ResultsAndWeights<T> {
+class ResultsAndWeights {
   /// Instantiates it
   ResultsAndWeights({
     required this.results,
@@ -29,14 +29,14 @@ class ResultsAndWeights<T> {
   });
 
   /// The list of results
-  final List<Result<T>> results;
+  final List<Result> results;
 
   /// The weights
   final Map<String, double> weights;
 }
 
 /// Holds the result (with score and index)
-class Result<T> {
+class Result {
   /// Instantiates it
   Result({
     required this.item,
@@ -45,10 +45,10 @@ class Result<T> {
   });
 
   /// Item in the original list
-  final T item;
+  final String item;
 
   /// Details of this result
-  final List<ResultDetails<T>> matches;
+  final List<ResultDetails> matches;
 
   /// Score of this result
   double score;
@@ -58,7 +58,7 @@ class Result<T> {
 }
 
 /// Details of a result.
-class ResultDetails<T> {
+class ResultDetails {
   /// Instantiates it
   ResultDetails({
     this.key = '',
